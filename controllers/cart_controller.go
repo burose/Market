@@ -41,6 +41,7 @@ func Setcart(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err})
 		return
 	}
+	//对应商品数量减少
 	product.Number -= cart.Quantity
 
 	if err := global.RedisDB.Del(cacheKey_cart).Err(); err != nil {
@@ -190,4 +191,22 @@ func Clearcart(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{"message": "Cart cleared successfully"})
+}
+func Deletecart(ctx *gin.Context) {
+	cartid := ctx.Param("id")
+
+	// 从数据库中删除购物车项
+	if err := global.DB.Delete(&models.Cart{}, "cart_id = ?", cartid).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete cart from database"})
+		return
+	}
+
+	// 从缓存中删除购物车项
+	if err := global.RedisDB.Del(cacheKey_cart + cartid).Err(); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete cart from cache"})
+		return
+	}
+
+	// 返回成功响应
+	ctx.JSON(http.StatusOK, gin.H{"message": "Cart item deleted successfully"})
 }

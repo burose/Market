@@ -3,6 +3,7 @@ package controllers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis"
 	"gorm.io/gorm"
@@ -14,9 +15,8 @@ import (
 var cacheKey_order = "order"
 
 type UpdateorderRequest struct {
-	userid    uint `json:"userid"`
-	ProductID uint `json:"product_id" binding:"required"`
-	Quantity  uint `json:"quantity" binding:"required"`
+	User_id uint `json:"user_id" binding:"required"`
+	Cart_id uint `json:"cart_id" binding:"required"`
 }
 
 func Createorder(ctx *gin.Context) {
@@ -99,13 +99,18 @@ func Updateorder(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := global.DB.Preload("Products").First(&order, orderid).Error; err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+	if err := global.DB.Where("order_id = ?", orderid).First(&order).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		} else {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
-	var product models.Product
-	if err := global.DB.Preload("product").Where("product_id = ?", req.ProductID).First(&product).Error; err != nil {
+	var cart models.Cart
+	if err := global.DB.Where("cart_id = ?", req.Cart_id).First(&cart).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
@@ -115,21 +120,18 @@ func Updateorder(ctx *gin.Context) {
 		}
 	}
 
-	order.Total += req.Quantity * product.Price
-	product.Number -= req.Quantity
-	if err := global.DB.Save(&product).Error; err != nil {
+	order.CartId = req.Cart_id
+	order.UserId = req.User_id
+	order.Total += cart.Price * cart.Quantity
+	fmt.Println(order.Total)
+
+	if err := global.DB.Save(&order).Error; err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// 重新获取所有订单数据，并更新缓存
-	var orders []models.Order
-	if err := global.DB.Find(&orders).Error; err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err})
-		return
-	}
 	// 将订单数据序列化为JSON格式
-	orderjson, err := json.Marshal(orders)
+	orderjson, err := json.Marshal(order)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err})
 		return
@@ -148,7 +150,7 @@ func Cancelorder(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if err := global.DB.Where("id = ?", orderid).Delete(&models.Order{}).Error; err != nil {
+	if err := global.DB.Where("order_id = ?", orderid).Delete(&models.Order{}).Error; err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

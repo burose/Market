@@ -40,6 +40,7 @@ func SetupRouter() *gin.Engine {
 		cart.GET("/get", controllers.Getcart)
 		cart.PUT("/add/:id", controllers.Addcart)
 		cart.DELETE("/clear/:id", controllers.Clearcart)
+		cart.DELETE("/delete/:id", controllers.Deletecart)
 	}
 	order := r.Group("/api/order")
 	order.Use(middlewares.AuthMiddleware())
@@ -47,8 +48,8 @@ func SetupRouter() *gin.Engine {
 		order.POST("/create", controllers.Createorder)
 		order.GET("/get", controllers.Getorder)
 		order.PUT("/update/:id", controllers.Updateorder)
-		order.PUT("/cancel/:id", controllers.Cancelorder)
-		order.POST("/pay/:id", controllers.Payorder)
+		order.DELETE("/cancel/:id", controllers.Cancelorder)
+		order.PUT("/pay/:id", controllers.Payorder)
 	}
 
 	return r
